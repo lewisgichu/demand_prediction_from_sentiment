@@ -6,34 +6,38 @@ import os
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # Load the Operationalized Model
-MODEL_PATH = 'rf_model_v1.joblib'
+MODEL_PATH = 'priceoptima_xgb_tuned.joblib'
 if os.path.exists(MODEL_PATH):
     rf_model = joblib.load(MODEL_PATH)
 else:
-    raise FileNotFoundError(f"Model {MODEL_PATH} not found. Please run 'python train_model.py' first.")
+    raise FileNotFoundError(f"Model {MODEL_PATH} not found. Please run the training script first.")
 
 analyzer = SentimentIntensityAnalyzer()
 
 def analyze_product_data(df):
     results = []
     
-    # 1. Feature Engineering (Must perfectly match train_model.py)
+    # 1. Feature Engineering (Must perfectly match the Colab training script)
     df['average_rating'] = df.get('average_rating', 4.0)
     df['rating_number'] = df.get('rating_number', 100)
     df['price'] = df.get('price', 50.0)
     df['title'] = df.get('product_name', 'Unknown Product')
     
+    # Ensure comments exist to avoid errors
+    df['comments'] = df.get('comments', '')
+    
     # NLP Extraction
     df['net_sentiment'] = df['comments'].apply(lambda x: analyzer.polarity_scores(str(x))['compound'])
     
-    # Engineered Math Features
-    df['title_len'] = df['title'].apply(lambda x: len(str(x)))
+    # Engineered Math Features (UPDATED to match Colab model)
+    df['review_len'] = df['comments'].apply(lambda x: len(str(x)))  # Changed from title_len
     df['price_log1p'] = df['price'].apply(lambda x: math.log1p(x) if x > 0 else 0)
     df['price_x_avg_rating'] = df['price'] * df['average_rating']
     
     # 2. Inference: Predict the Demand Proxy
+    # UPDATED to include 'review_len' instead of 'title_len'
     feature_cols = ['price', 'average_rating', 'rating_number', 'net_sentiment', 
-                    'title_len', 'price_log1p', 'price_x_avg_rating']
+                    'review_len', 'price_log1p', 'price_x_avg_rating']
     
     X_predict = df[feature_cols].fillna(0)
     df['predicted_demand'] = rf_model.predict(X_predict)
