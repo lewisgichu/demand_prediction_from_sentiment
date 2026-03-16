@@ -150,7 +150,7 @@ else:
                     
                     col_metrics, col_gauge = st.columns([1, 1])
                     
-                    with col_metrics:
+                    '''with col_metrics:
                         st.markdown("#### 📊 Current Metrics")
                         m1, m2 = st.columns(2)
                         m1.metric("💰 Current Price", f"${product_data['current_price']}")
@@ -164,7 +164,23 @@ else:
                         elif "IMPROVE" in product_data['recommendation']:
                             st.warning("Halt price increases immediately. Route product feedback to QA/Manufacturing teams.")
                         else:
-                            st.error("Begin inventory liquidation. Do not reorder this SKU.")
+                            st.error("Begin inventory liquidation. Do not reorder this SKU.")'''
+                    with col_metrics:
+                        st.markdown("#### 📊 Current Metrics")
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("💰 Current Price", f"${product_data['current_price']}")
+                        m2.metric("🎯 A/B Test Target", f"${product_data['ab_test_price']}")
+                        m3.metric("📦 Monthly Volume", product_data['monthly_sales'])
+                        
+                        st.markdown("#### 💡 Strategy & A/B Test Execution")
+                        if "INCREASE" in product_data['recommendation']:
+                            st.info(f"**A/B Test Warning:** Do not change prices globally. Test the new ${product_data['ab_test_price']} target on 20% of web traffic for 14 days to monitor elasticity.")
+                        elif product_data['diagnosis'] == "Hidden Gem":
+                            st.success(f"**Marketing Alert:** Drop price to ${product_data['ab_test_price']}. Clearly display **'10% OFF'** badges on the product page to entice conversion.")
+                        elif "IMPROVE" in product_data['recommendation']:
+                            st.warning(f"**Quality Alert:** Hold price at ${product_data['current_price']}. Routing feedback to QA to prevent demand collapse.")
+                        else:
+                            st.error(f"**Liquidation Alert:** Drop price to ${product_data['ab_test_price']}. Clearly display **'50% OFF - FINAL SALE'** to clear inventory.")
                             
                     with col_gauge:
                         fig_gauge = go.Figure(go.Indicator(
