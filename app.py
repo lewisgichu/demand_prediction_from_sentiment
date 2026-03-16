@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import requests # For talking to the Render API over the internet
+import requests 
 
 # --- UI Configuration ---
 st.set_page_config(page_title="PriceOptima AI", layout="wide", page_icon="🚀", initial_sidebar_state="expanded")
@@ -68,25 +68,19 @@ if uploaded_file is None:
         st.write("Classify products into actionable quadrants to defend market share.")
 
 else:
-    # --- CONNECT TO RENDER API ---
-    # This URL points to your live backend on the internet!
     API_URL = "https://priceoptima-api.onrender.com/analyze"
     
-    with st.spinner("Connecting to PriceOptima AI API on Render..."):
+    # Changed the loading text to hide Render from the end-user
+    with st.spinner("Processing intelligence data..."):
         try:
-            # Package the uploaded file to send via POST request
             files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-            
-            # Send the file to your API
             response = requests.post(API_URL, files=files)
             
             if response.status_code == 200:
-                # The API successfully processed the data!
                 api_data = response.json()
                 results = api_data["data"]
                 results_df = pd.DataFrame(results)
                 
-                # --- Dynamic Filtering ---
                 st.sidebar.divider()
                 st.sidebar.markdown("### 🔍 Filter Dashboard")
                 filter_option = st.sidebar.radio(
@@ -101,7 +95,6 @@ else:
                 st.divider()
 
                 if filter_option == "Portfolio Overview (All Products)":
-                    # --- PORTFOLIO VIEW ---
                     k1, k2, k3, k4 = st.columns(4)
                     k1.metric("📦 Total Products Analyzed", len(results_df))
                     k2.metric("⭐ Star Products (Increase Price)", len(results_df[results_df['diagnosis'] == 'Star']))
@@ -111,10 +104,9 @@ else:
                     st.markdown("### 💵 Portfolio Positioning")
                     chart_col1, chart_col2 = st.columns(2)
                     
-                    color_map = {"Star": "#22c55e", "Dog": "#ef4444", "Ticking Time Bomb": "#ec4899", "Hidden Gem": "#3b82f6"}
+                    color_map = {"Star": "#22c55e", "Dog": "#ef4444", "Ticking Time Bomb": "#ec4899", "Hidden Gem": "#3b82f6", "Unknown": "#cbd5e1"}
                     
                     with chart_col1:
-                        # RENDER_MODE='WEBGL' handles 100k points using the graphics card instead of the CPU
                         fig_scatter = px.scatter(results_df, x='net_sentiment', y='monthly_sales', color='diagnosis',
                                                  hover_name='product_name',
                                                  title="Demand vs. Sentiment Matrix (Enterprise View)",
@@ -126,7 +118,6 @@ else:
                         st.plotly_chart(fig_scatter, use_container_width=True)
                         
                     with chart_col2:
-                        # AGGREGATE view: 100k individual bars crash browsers. Show totals by strategy instead.
                         summary_df = results_df.groupby('diagnosis')['monthly_sales'].sum().reset_index()
                         fig_bar = px.bar(summary_df, x='diagnosis', y='monthly_sales', color='diagnosis', 
                                          title="Total Portfolio Volume by Strategy", 
@@ -138,7 +129,6 @@ else:
                     st.dataframe(results_df[['product_name', 'current_price', 'monthly_sales', 'net_sentiment', 'recommendation']], use_container_width=True)
 
                 else:
-                    # --- DEEP DIVE VIEW (Single Product) ---
                     product_data = results_df[results_df['product_name'] == selected_product].iloc[0]
                     
                     st.markdown(f"### Deep Dive Analysis: **{product_data['product_name']}**")
@@ -147,6 +137,7 @@ else:
                     if product_data['diagnosis'] == "Star": css_class, icon = "card-star", "⭐"
                     elif product_data['diagnosis'] == "Hidden Gem": css_class, icon = "card-gem", "💎"
                     elif product_data['diagnosis'] == "Ticking Time Bomb": css_class, icon = "card-bomb", "💣"
+                    elif product_data['diagnosis'] == "Unknown": css_class, icon = "", "❓"
                     
                     card_html = f"""
                     <div class="diag-card {css_class}">
@@ -202,7 +193,6 @@ else:
                         fig_gauge.update_layout(margin=dict(l=20, r=20, t=50, b=20), height=300)
                         st.plotly_chart(fig_gauge, use_container_width=True)
             else:
-                # If the API throws an error
                 st.error(f"Error from API: {response.status_code} - {response.text}")
         except Exception as e:
-            st.error(f"Failed to connect to the Render API. Ensure it is running. Error details: {e}")
+            st.error(f"Failed to process request. Error details: {e}")

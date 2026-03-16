@@ -21,10 +21,10 @@ def analyze_product_data(df):
     df['title'] = df.get('product_name', 'Unknown Product')
     df['comments'] = df.get('comments', '').astype(str)
     
-    # NLP Extraction (List comprehension is highly optimized in Python)
+    # NLP Extraction
     df['net_sentiment'] = [analyzer.polarity_scores(text)['compound'] for text in df['comments']]
     
-    # Engineered Math Features (Using fast Numpy arrays)
+    # Engineered Math Features
     df['review_len'] = df['comments'].str.len().fillna(0)
     df['price_log1p'] = np.log1p(np.where(df['price'] > 0, df['price'], 0))
     df['price_x_avg_rating'] = df['price'] * df['average_rating']
@@ -39,7 +39,7 @@ def analyze_product_data(df):
     # Determine Portfolio Thresholds
     median_demand = df['predicted_demand'].median()
     
-    # 3. Diagnostic & Strategy Logic (VECTORIZED - Removes the slow 'for' loop entirely)
+    # 3. Diagnostic & Strategy Logic (VECTORIZED)
     conditions = [
         (df['predicted_demand'] > median_demand) & (df['net_sentiment'] > 0),
         (df['predicted_demand'] <= median_demand) & (df['net_sentiment'] > 0),
@@ -56,16 +56,16 @@ def analyze_product_data(df):
         "Low predicted demand and negative market feedback. Liquidate inventory and do not reorder."
     ]
     
-    # Apply conditions instantly across 100,000 rows
-    df['diagnosis'] = np.select(conditions, diagnoses)
-    df['recommendation'] = np.select(conditions, recommendations)
-    df['reasoning'] = np.select(conditions, reasonings)
+    # Apply conditions instantly across 100,000 rows (ADDED default values to fix the Numpy Error!)
+    df['diagnosis'] = np.select(conditions, diagnoses, default="Unknown")
+    df['recommendation'] = np.select(conditions, recommendations, default="REVIEW MANUALLY")
+    df['reasoning'] = np.select(conditions, reasonings, default="Data incomplete or unclassifiable.")
     
     # 4. Clean and Format Data 
     df['product_name'] = df['title']
     df['current_price'] = df['price'].round(2)
-    df['net_sentiment'] = df['net_sentiment'].round(3)
-    df['monthly_sales'] = df['predicted_demand'].round(2)
+    df['net_sentiment'] = np.round(df['net_sentiment'], 3)
+    df['monthly_sales'] = np.round(df['predicted_demand'], 2)
     
-    # Return bulk dictionary directly (Milliseconds instead of Minutes)
+    # Return bulk dictionary directly
     return df[['product_name', 'current_price', 'net_sentiment', 'monthly_sales', 'diagnosis', 'recommendation', 'reasoning']].to_dict(orient='records')
