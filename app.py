@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import requests # NEW: For talking to the Render API over the internet
+import requests # For talking to the Render API over the internet
 
 # --- UI Configuration ---
 st.set_page_config(page_title="PriceOptima AI", layout="wide", page_icon="🚀", initial_sidebar_state="expanded")
@@ -114,20 +114,24 @@ else:
                     color_map = {"Star": "#22c55e", "Dog": "#ef4444", "Ticking Time Bomb": "#ec4899", "Hidden Gem": "#3b82f6"}
                     
                     with chart_col1:
+                        # RENDER_MODE='WEBGL' handles 100k points using the graphics card instead of the CPU
                         fig_scatter = px.scatter(results_df, x='net_sentiment', y='monthly_sales', color='diagnosis',
-                                                 size='current_price', hover_name='product_name',
-                                                 title="Demand vs. Sentiment Matrix",
+                                                 hover_name='product_name',
+                                                 title="Demand vs. Sentiment Matrix (Enterprise View)",
                                                  color_discrete_map=color_map,
-                                                 labels={"net_sentiment": "Net Sentiment Score", "monthly_sales": "Monthly Volume"})
+                                                 labels={"net_sentiment": "Net Sentiment", "monthly_sales": "Volume"},
+                                                 render_mode='webgl') 
                         fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray")
                         fig_scatter.update_layout(margin=dict(l=20, r=20, t=40, b=20))
                         st.plotly_chart(fig_scatter, use_container_width=True)
                         
                     with chart_col2:
-                        fig_bar = px.bar(results_df, x='product_name', y='monthly_sales', color='diagnosis', 
-                                         title="Sales Volume by Product", 
+                        # AGGREGATE view: 100k individual bars crash browsers. Show totals by strategy instead.
+                        summary_df = results_df.groupby('diagnosis')['monthly_sales'].sum().reset_index()
+                        fig_bar = px.bar(summary_df, x='diagnosis', y='monthly_sales', color='diagnosis', 
+                                         title="Total Portfolio Volume by Strategy", 
                                          color_discrete_map=color_map)
-                        fig_bar.update_layout(margin=dict(l=20, r=20, t=40, b=20), xaxis_title="Product", yaxis_title="Volume")
+                        fig_bar.update_layout(margin=dict(l=20, r=20, t=40, b=20), xaxis_title="Strategy Matrix", yaxis_title="Total Predicted Volume")
                         st.plotly_chart(fig_bar, use_container_width=True)
                         
                     st.markdown("### 📑 Raw Intelligence Data")
