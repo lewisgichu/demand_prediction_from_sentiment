@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-from engine import analyze_product_data
 import plotly.express as px
 import plotly.graph_objects as go
+import requests # NEW: For talking to the Render API over the internet
 
 # --- UI Configuration ---
 st.set_page_config(page_title="PriceOptima AI", layout="wide", page_icon="🚀", initial_sidebar_state="expanded")
@@ -68,124 +68,137 @@ if uploaded_file is None:
         st.write("Classify products into actionable quadrants to defend market share.")
 
 else:
-    # --- Data Processing ---
-    df = pd.read_csv(uploaded_file)
-    results = analyze_product_data(df)
-    results_df = pd.DataFrame(results)
+    # --- CONNECT TO RENDER API ---
+    # This URL points to your live backend on the internet!
+    API_URL = "https://priceoptima-api.onrender.com/analyze"
     
-    # --- Dynamic Filtering ---
-    st.sidebar.divider()
-    st.sidebar.markdown("### 🔍 Filter Dashboard")
-    filter_option = st.sidebar.radio(
-        "Select View:",
-        ["Portfolio Overview (All Products)", "Deep Dive (Single Product)"]
-    )
-    
-    if filter_option == "Deep Dive (Single Product)":
-        selected_product = st.sidebar.selectbox("Select a Product to Analyze:", results_df['product_name'].unique())
-    
-    st.markdown('<div class="main-header">Intelligence Dashboard 🧠</div>', unsafe_allow_html=True)
-    st.divider()
-
-    if filter_option == "Portfolio Overview (All Products)":
-        # --- PORTFOLIO VIEW ---
-        # Top Level KPIs
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("📦 Total Products Analyzed", len(results_df))
-        k2.metric("⭐ Star Products (Increase Price)", len(results_df[results_df['diagnosis'] == 'Star']))
-        k3.metric("💣 Time Bombs (At Risk)", len(results_df[results_df['diagnosis'] == 'Ticking Time Bomb']))
-        k4.metric("📈 Avg Portfolio Sentiment", round(results_df['net_sentiment'].mean(), 2))
-        
-        st.markdown("### 💵 Portfolio Positioning")
-        chart_col1, chart_col2 = st.columns(2)
-        
-        color_map = {"Star": "#22c55e", "Dog": "#ef4444", "Ticking Time Bomb": "#ec4899", "Hidden Gem": "#3b82f6"}
-        
-        with chart_col1:
-            fig_scatter = px.scatter(results_df, x='net_sentiment', y='monthly_sales', color='diagnosis',
-                                     size='current_price', hover_name='product_name',
-                                     title="Demand vs. Sentiment Matrix",
-                                     color_discrete_map=color_map,
-                                     labels={"net_sentiment": "Net Sentiment Score", "monthly_sales": "Monthly Volume"})
-            fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray")
-            fig_scatter.update_layout(margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_scatter, use_container_width=True)
+    with st.spinner("Connecting to PriceOptima AI API on Render..."):
+        try:
+            # Package the uploaded file to send via POST request
+            files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
             
-        with chart_col2:
-            fig_bar = px.bar(results_df, x='product_name', y='monthly_sales', color='diagnosis', 
-                             title="Sales Volume by Product", 
-                             color_discrete_map=color_map)
-            fig_bar.update_layout(margin=dict(l=20, r=20, t=40, b=20), xaxis_title="Product", yaxis_title="Volume")
-            st.plotly_chart(fig_bar, use_container_width=True)
+            # Send the file to your API
+            response = requests.post(API_URL, files=files)
             
-        # Data Table
-        st.markdown("### 📑 Raw Intelligence Data")
-        st.dataframe(results_df[['product_name', 'current_price', 'monthly_sales', 'net_sentiment', 'recommendation']], use_container_width=True)
-
-    else:
-        # --- DEEP DIVE VIEW (Single Product) ---
-        product_data = results_df[results_df['product_name'] == selected_product].iloc[0]
-        
-        st.markdown(f"### Deep Dive Analysis: **{product_data['product_name']}**")
-        
-        # 1. Recommendation Card (Full Width)
-        css_class, icon = "card-dog", "🐕"
-        if product_data['diagnosis'] == "Star": css_class, icon = "card-star", "⭐"
-        elif product_data['diagnosis'] == "Hidden Gem": css_class, icon = "card-gem", "💎"
-        elif product_data['diagnosis'] == "Ticking Time Bomb": css_class, icon = "card-bomb", "💣"
-        
-        card_html = f"""
-        <div class="diag-card {css_class}">
-            <div class="diag-title">{icon} {product_data['diagnosis']}</div>
-            <div class="diag-rec">ACTION: {product_data['recommendation']}</div>
-            <div class="diag-reason"><strong>AI Logic:</strong> {product_data['reasoning']}</div>
-        </div>
-        """
-        st.markdown(card_html, unsafe_allow_html=True)
-        
-        # 2. Detailed Metrics & Visuals
-        col_metrics, col_gauge = st.columns([1, 1])
-        
-        with col_metrics:
-            st.markdown("#### 📊 Current Metrics")
-            m1, m2 = st.columns(2)
-            m1.metric("💰 Current Price", f"${product_data['current_price']}")
-            m2.metric("📦 Monthly Volume", product_data['monthly_sales'])
-            
-            st.markdown("#### 💡 Next Steps for Management")
-            if "INCREASE" in product_data['recommendation']:
-                st.info("Initiate a 5-10% price test. Monitor volume for 14 days to ensure elasticity holds.")
-            elif "DECREASE" in product_data['recommendation'] and "PHASE OUT" not in product_data['recommendation']:
-                st.info("Deploy promotional pricing. Highlight positive customer reviews in new marketing copy.")
-            elif "IMPROVE" in product_data['recommendation']:
-                st.warning("Halt price increases immediately. Route product feedback to QA/Manufacturing teams.")
-            else:
-                st.error("Begin inventory liquidation. Do not reorder this SKU.")
+            if response.status_code == 200:
+                # The API successfully processed the data!
+                api_data = response.json()
+                results = api_data["data"]
+                results_df = pd.DataFrame(results)
                 
-        with col_gauge:
-            # Plotly Gauge Chart for Sentiment
-            fig_gauge = go.Figure(go.Indicator(
-                mode = "gauge+number",
-                value = product_data['net_sentiment'],
-                domain = {'x': [0, 1], 'y': [0, 1]},
-                title = {'text': "Customer Sentiment Score", 'font': {'size': 20}},
-                gauge = {
-                    'axis': {'range': [-1, 1], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                    'bar': {'color': "rgba(0,0,0,0.3)"},
-                    'bgcolor': "white",
-                    'borderwidth': 2,
-                    'bordercolor': "gray",
-                    'steps': [
-                        {'range': [-1, -0.3], 'color': '#fee2e2'}, # Red
-                        {'range': [-0.3, 0.3], 'color': '#f1f5f9'}, # Neutral Grey
-                        {'range': [0.3, 1], 'color': '#dcfce7'}    # Green
-                    ],
-                    'threshold': {
-                        'line': {'color': "black", 'width': 4},
-                        'thickness': 0.75,
-                        'value': product_data['net_sentiment']
-                    }
-                }
-            ))
-            fig_gauge.update_layout(margin=dict(l=20, r=20, t=50, b=20), height=300)
-            st.plotly_chart(fig_gauge, use_container_width=True)
+                # --- Dynamic Filtering ---
+                st.sidebar.divider()
+                st.sidebar.markdown("### 🔍 Filter Dashboard")
+                filter_option = st.sidebar.radio(
+                    "Select View:",
+                    ["Portfolio Overview (All Products)", "Deep Dive (Single Product)"]
+                )
+                
+                if filter_option == "Deep Dive (Single Product)":
+                    selected_product = st.sidebar.selectbox("Select a Product to Analyze:", results_df['product_name'].unique())
+                
+                st.markdown('<div class="main-header">Intelligence Dashboard 🧠</div>', unsafe_allow_html=True)
+                st.divider()
+
+                if filter_option == "Portfolio Overview (All Products)":
+                    # --- PORTFOLIO VIEW ---
+                    k1, k2, k3, k4 = st.columns(4)
+                    k1.metric("📦 Total Products Analyzed", len(results_df))
+                    k2.metric("⭐ Star Products (Increase Price)", len(results_df[results_df['diagnosis'] == 'Star']))
+                    k3.metric("💣 Time Bombs (At Risk)", len(results_df[results_df['diagnosis'] == 'Ticking Time Bomb']))
+                    k4.metric("📈 Avg Portfolio Sentiment", round(results_df['net_sentiment'].mean(), 2))
+                    
+                    st.markdown("### 💵 Portfolio Positioning")
+                    chart_col1, chart_col2 = st.columns(2)
+                    
+                    color_map = {"Star": "#22c55e", "Dog": "#ef4444", "Ticking Time Bomb": "#ec4899", "Hidden Gem": "#3b82f6"}
+                    
+                    with chart_col1:
+                        fig_scatter = px.scatter(results_df, x='net_sentiment', y='monthly_sales', color='diagnosis',
+                                                 size='current_price', hover_name='product_name',
+                                                 title="Demand vs. Sentiment Matrix",
+                                                 color_discrete_map=color_map,
+                                                 labels={"net_sentiment": "Net Sentiment Score", "monthly_sales": "Monthly Volume"})
+                        fig_scatter.add_vline(x=0, line_dash="dash", line_color="gray")
+                        fig_scatter.update_layout(margin=dict(l=20, r=20, t=40, b=20))
+                        st.plotly_chart(fig_scatter, use_container_width=True)
+                        
+                    with chart_col2:
+                        fig_bar = px.bar(results_df, x='product_name', y='monthly_sales', color='diagnosis', 
+                                         title="Sales Volume by Product", 
+                                         color_discrete_map=color_map)
+                        fig_bar.update_layout(margin=dict(l=20, r=20, t=40, b=20), xaxis_title="Product", yaxis_title="Volume")
+                        st.plotly_chart(fig_bar, use_container_width=True)
+                        
+                    st.markdown("### 📑 Raw Intelligence Data")
+                    st.dataframe(results_df[['product_name', 'current_price', 'monthly_sales', 'net_sentiment', 'recommendation']], use_container_width=True)
+
+                else:
+                    # --- DEEP DIVE VIEW (Single Product) ---
+                    product_data = results_df[results_df['product_name'] == selected_product].iloc[0]
+                    
+                    st.markdown(f"### Deep Dive Analysis: **{product_data['product_name']}**")
+                    
+                    css_class, icon = "card-dog", "🐕"
+                    if product_data['diagnosis'] == "Star": css_class, icon = "card-star", "⭐"
+                    elif product_data['diagnosis'] == "Hidden Gem": css_class, icon = "card-gem", "💎"
+                    elif product_data['diagnosis'] == "Ticking Time Bomb": css_class, icon = "card-bomb", "💣"
+                    
+                    card_html = f"""
+                    <div class="diag-card {css_class}">
+                        <div class="diag-title">{icon} {product_data['diagnosis']}</div>
+                        <div class="diag-rec">ACTION: {product_data['recommendation']}</div>
+                        <div class="diag-reason"><strong>AI Logic:</strong> {product_data['reasoning']}</div>
+                    </div>
+                    """
+                    st.markdown(card_html, unsafe_allow_html=True)
+                    
+                    col_metrics, col_gauge = st.columns([1, 1])
+                    
+                    with col_metrics:
+                        st.markdown("#### 📊 Current Metrics")
+                        m1, m2 = st.columns(2)
+                        m1.metric("💰 Current Price", f"${product_data['current_price']}")
+                        m2.metric("📦 Monthly Volume", product_data['monthly_sales'])
+                        
+                        st.markdown("#### 💡 Next Steps for Management")
+                        if "INCREASE" in product_data['recommendation']:
+                            st.info("Initiate a 5-10% price test. Monitor volume for 14 days to ensure elasticity holds.")
+                        elif "DECREASE" in product_data['recommendation'] and "PHASE OUT" not in product_data['recommendation']:
+                            st.info("Deploy promotional pricing. Highlight positive customer reviews in new marketing copy.")
+                        elif "IMPROVE" in product_data['recommendation']:
+                            st.warning("Halt price increases immediately. Route product feedback to QA/Manufacturing teams.")
+                        else:
+                            st.error("Begin inventory liquidation. Do not reorder this SKU.")
+                            
+                    with col_gauge:
+                        fig_gauge = go.Figure(go.Indicator(
+                            mode = "gauge+number",
+                            value = product_data['net_sentiment'],
+                            domain = {'x': [0, 1], 'y': [0, 1]},
+                            title = {'text': "Customer Sentiment Score", 'font': {'size': 20}},
+                            gauge = {
+                                'axis': {'range': [-1, 1], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                                'bar': {'color': "rgba(0,0,0,0.3)"},
+                                'bgcolor': "white",
+                                'borderwidth': 2,
+                                'bordercolor': "gray",
+                                'steps': [
+                                    {'range': [-1, -0.3], 'color': '#fee2e2'}, # Red
+                                    {'range': [-0.3, 0.3], 'color': '#f1f5f9'}, # Neutral Grey
+                                    {'range': [0.3, 1], 'color': '#dcfce7'}    # Green
+                                ],
+                                'threshold': {
+                                    'line': {'color': "black", 'width': 4},
+                                    'thickness': 0.75,
+                                    'value': product_data['net_sentiment']
+                                }
+                            }
+                        ))
+                        fig_gauge.update_layout(margin=dict(l=20, r=20, t=50, b=20), height=300)
+                        st.plotly_chart(fig_gauge, use_container_width=True)
+            else:
+                # If the API throws an error
+                st.error(f"Error from API: {response.status_code} - {response.text}")
+        except Exception as e:
+            st.error(f"Failed to connect to the Render API. Ensure it is running. Error details: {e}")
