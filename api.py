@@ -1,44 +1,59 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from engine import analyze_product_data
+import io
 
-app = Flask(__name__)
-CORS(app) # Allows cross-origin requests
+# Initialize FastAPI with metadata for the automatic documentation
+app = FastAPI(
+    title="PriceOptima AI API",
+    description="Enterprise Retail Intelligence Engine for Sentiment-Driven Price Optimization. Upload a CSV of product data and reviews to receive automated pricing recommendations.",
+    version="1.0.0"
+)
 
-@app.route('/', methods=['GET'])
+# Allow Cross-Origin Requests (CORS) so your Streamlit app can talk to it
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/", tags=["Health Check"])
 def home():
-    return jsonify({
+    """Simple health check endpoint to verify the API is running."""
+    return {
         "status": "online",
-        "message": "PriceOptima API is running! Send a POST request with a CSV file to the /analyze endpoint."
-    }), 200
+        "message": "PriceOptima API is running! Visit /docs for the interactive API documentation."
+    }
 
-@app.route('/analyze', methods=['POST'])
-def analyze_endpoint():
-    # Check if a file is uploaded
-    if 'file' not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-        
-    file = request.files['file']
+@app.post("/analyze", tags=["Intelligence Engine"])
+async def analyze_endpoint(file: UploadFile = File(...)):
+    """
+    **Upload a CSV file** containing product data.
     
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+    Required CSV Columns:
+    - `price`: Current price of the item
+    - `average_rating`: Star rating (1 to 5)
+    - `rating_number`: Total number of reviews
+    - `comments`: The actual text of the customer reviews
+    """
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV.")
         
     try:
-        # Read the CSV file
-        df = pd.read_csv(file)
+        # Read the uploaded file into memory
+        contents = await file.read()
+        df = pd.read_csv(io.BytesIO(contents))
         
-        # Run through our diagnostic engine
+        # Run through the PriceOptima diagnostic engine
         analysis_results = analyze_product_data(df)
         
-        return jsonify({
+        return {
             "status": "success",
             "data": analysis_results
-        }), 200
+        }
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    # Run the Flask API on port 5000
-    app.run(debug=True, port=5000)
+        raise HTTPException(status_code=500, detail=str(e))
