@@ -150,21 +150,6 @@ else:
                     
                     col_metrics, col_gauge = st.columns([1, 1])
                     
-                    '''with col_metrics:
-                        st.markdown("#### 📊 Current Metrics")
-                        m1, m2 = st.columns(2)
-                        m1.metric("💰 Current Price", f"${product_data['current_price']}")
-                        m2.metric("📦 Monthly Volume", product_data['monthly_sales'])
-                        
-                        st.markdown("#### 💡 Next Steps for Management")
-                        if "INCREASE" in product_data['recommendation']:
-                            st.info("Initiate a 5-10% price test. Monitor volume for 14 days to ensure elasticity holds.")
-                        elif "DECREASE" in product_data['recommendation'] and "PHASE OUT" not in product_data['recommendation']:
-                            st.info("Deploy promotional pricing. Highlight positive customer reviews in new marketing copy.")
-                        elif "IMPROVE" in product_data['recommendation']:
-                            st.warning("Halt price increases immediately. Route product feedback to QA/Manufacturing teams.")
-                        else:
-                            st.error("Begin inventory liquidation. Do not reorder this SKU.")'''
                     with col_metrics:
                         st.markdown("#### 📊 Current Metrics")
                         m1, m2, m3 = st.columns(3)
